@@ -31,8 +31,8 @@ class CoachMark private constructor(builder: Builder) {
     private val activity: Activity
     private val container: FrameLayout
 
-    @TooltipAlignment private var tooltipAlignment: Long = 0
-    @PointerTooltipAlignment private var tooltipPointerAlignment: Long = 0
+    @TooltipAlignment private var tooltipAlignment: Int = 0
+    @PointerTooltipAlignment private var tooltipPointerAlignment: Int = 0
     private val overlayPadding: Int
     private val tooltipMargin: Int
     private val backgroundColorResource: Int
@@ -45,7 +45,7 @@ class CoachMark private constructor(builder: Builder) {
     private val tooltipViewModel: WidgetCoachTooltipViewModel
     private val tooltipBinding: WidgetCoachTooltipBinding
     private lateinit var coachMarkOverlay: CoachMarkOverlay
-    private val targetView: View?
+    private val targetView: List<View?>?
     private var targetOnClick: View.OnClickListener? = null
     private val onDismissListener: (() -> Unit)?
     private val onAfterDismissListener: (() -> Unit)?
@@ -148,13 +148,13 @@ class CoachMark private constructor(builder: Builder) {
         this.targetOnClick = targetOnClick
     }
 
-    private fun setTooltipAlignment(@TooltipAlignment tooltipAlignment: Long, @PointerTooltipAlignment pointerTooltipAlignment: Long) {
+    private fun setTooltipAlignment(@TooltipAlignment tooltipAlignment: Int, @PointerTooltipAlignment pointerTooltipAlignment: Int) {
         this.tooltipAlignment = tooltipAlignment
         this.tooltipPointerAlignment = pointerTooltipAlignment
         tooltipBinding.root.viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
             override fun onPreDraw(): Boolean {
-                relocationTooltip(targetView, tooltipAlignment)
-                pointerTooltipAlignment(targetView, pointerTooltipAlignment)
+                relocationTooltip(targetView?.get(0), tooltipAlignment)
+                pointerTooltipAlignment(targetView?.get(0), pointerTooltipAlignment)
                 tooltipBinding.root.viewTreeObserver.removeOnPreDrawListener(this)
                 return false
             }
@@ -165,15 +165,19 @@ class CoachMark private constructor(builder: Builder) {
         if (targetView == null) {
             setTooltipAlignment(tooltipAlignment, tooltipPointerAlignment)
         } else {
-            targetView.viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
+            container.viewTreeObserver.addOnPreDrawListener(object : ViewTreeObserver.OnPreDrawListener {
                 override fun onPreDraw(): Boolean {
-                    if (isCircleMark) {
-                        addCircleRect(targetView)
-                    } else {
-                        addRoundRect(targetView)
+                    targetView.forEach {view -> view?.let {
+                        if (isCircleMark) {
+                            addCircleRect(it)
+                        } else {
+                            addRoundRect(it)
+                        }
                     }
+                    }
+                    coachMarkOverlay.postInvalidate()
                     setTooltipAlignment(tooltipAlignment, tooltipPointerAlignment)
-                    targetView.viewTreeObserver.removeOnPreDrawListener(this)
+                    container.viewTreeObserver.removeOnPreDrawListener(this)
                     return false
                 }
             })
@@ -183,34 +187,26 @@ class CoachMark private constructor(builder: Builder) {
     private fun addRoundRect(view: View) {
         val rect = Rect()
         view.getGlobalVisibleRect(rect)
-        val radius = this.radius
 
-        val x = rect.left
-        val y = rect.top
-        val width = rect.width()
-        val height = rect.height()
+        val radius = this.radius
         addTargetClick(rect, view)
         coachMarkOverlay.setBackgroundResource(backgroundColorResource)
         coachMarkOverlay.alpha = backgroundAlpha
-        coachMarkOverlay.addRect(x, y, width, height, radius, overlayPadding, isCircleMark)
-        coachMarkOverlay.postInvalidate()
+        coachMarkOverlay.addRect(view, radius, overlayPadding, isCircleMark)
     }
 
     private fun addCircleRect(view: View) {
         val rect = Rect()
         view.getGlobalVisibleRect(rect)
-        val cx = rect.centerX()
-        val cy = rect.centerY()
 
         val radius = (Math.max(rect.width(), rect.height()) / 2f * CIRCLE_ADDITIONAL_RADIUS_RATIO).toInt()
         addTargetClick(rect, view)
         coachMarkOverlay.setBackgroundResource(backgroundColorResource)
         coachMarkOverlay.alpha = backgroundAlpha
-        coachMarkOverlay.addRect(cx, cy, 0, 0, radius, overlayPadding, isCircleMark)
-        coachMarkOverlay.postInvalidate()
+        coachMarkOverlay.addRect(view, radius, overlayPadding, isCircleMark)
     }
 
-    private fun relocationTooltip(view: View?, @TooltipAlignment alignment: Long) {
+    private fun relocationTooltip(view: View?, @TooltipAlignment alignment: Int) {
         val tooltipView = tooltipBinding.root
 
         val tooltipHeight = tooltipView.height
@@ -299,7 +295,7 @@ class CoachMark private constructor(builder: Builder) {
         tooltipView.postInvalidate()
     }
 
-    private fun pointerTooltipAlignment(view: View?, @PointerTooltipAlignment pointerTooltipAlignment: Long) {
+    private fun pointerTooltipAlignment(view: View?, @PointerTooltipAlignment pointerTooltipAlignment: Int) {
         if (view == null) return
         val rect = Rect()
         view.getGlobalVisibleRect(rect)
@@ -439,7 +435,7 @@ class CoachMark private constructor(builder: Builder) {
      * @param activity for parent view
      */
     (internal val activity: Activity) {
-        internal var target: View? = null
+        internal var target: List<View?>? = null
         internal var tooltipChilds: ArrayList<View> =  ArrayList()
         internal var markerPadding: Int = 0
         internal var tooltipMatchWidth: Boolean = false
@@ -450,8 +446,8 @@ class CoachMark private constructor(builder: Builder) {
         internal var tooltipMargin: Int = 5
         internal var tooltipBackgroundColor: Int = 0
         internal var tooltipBackgroundColorString: String? = null
-        internal var tooltipAlignment: Long = CoachMark.ROOT_BOTTOM
-        internal var pointerTooltipAlignment: Long = CoachMark.POINTER_MIDDLE
+        internal var tooltipAlignment: Int = CoachMark.ROOT_BOTTOM
+        internal var pointerTooltipAlignment: Int = CoachMark.POINTER_MIDDLE
         internal var radius: Int = 5
         internal var onDismissListener: (() -> Unit)? = null
         internal var onAfterDismissListener: (() -> Unit)? = null
@@ -464,13 +460,13 @@ class CoachMark private constructor(builder: Builder) {
             return activity.findViewById<View?>(viewId)
         }
 
-        fun setTarget(target: View): Builder {
-            this.target = target
+        fun setTarget(vararg target: View): Builder {
+            this.target = listOf(*target)
             return this
         }
 
-        fun setTarget(@IdRes itemViewId: Int): Builder {
-            this.target = findViewById(itemViewId)
+        fun setTarget(@IdRes vararg itemViewId: Int): Builder {
+            this.target = itemViewId.map { findViewById(it) }
             return this
         }
 
@@ -494,12 +490,12 @@ class CoachMark private constructor(builder: Builder) {
             return this
         }
 
-        fun setTooltipAlignment(@TooltipAlignment tooltipAlignment: Long): Builder {
+        fun setTooltipAlignment(@TooltipAlignment tooltipAlignment: Int): Builder {
             this.tooltipAlignment = tooltipAlignment
             return this
         }
 
-        fun setTooltipPointer(@PointerTooltipAlignment pointerTooltipAlignment: Long): Builder {
+        fun setTooltipPointer(@PointerTooltipAlignment pointerTooltipAlignment: Int): Builder {
             this.pointerTooltipAlignment = pointerTooltipAlignment
             return this
         }
@@ -614,23 +610,23 @@ class CoachMark private constructor(builder: Builder) {
 
     companion object {
 
-        const val ROOT_TOP :Long = 1
-        const val ROOT_BOTTOM :Long = 2
-        const val ROOT_CENTER :Long = 3
-        const val TARGET_TOP :Long = 4
-        const val TARGET_BOTTOM :Long = 5
-        const val TARGET_TOP_LEFT :Long = 6
-        const val TARGET_BOTTOM_LEFT :Long = 7
-        const val TARGET_TOP_RIGHT :Long = 8
-        const val TARGET_BOTTOM_RIGHT :Long = 9
-        const val TARGET_FILL_IN :Long = 10
-        const val TARGET_LEFT :Long = 11
-        const val TARGET_RIGHT :Long = 12
+        const val ROOT_TOP :Int = 1
+        const val ROOT_BOTTOM :Int = 2
+        const val ROOT_CENTER :Int = 3
+        const val TARGET_TOP :Int = 4
+        const val TARGET_BOTTOM :Int = 5
+        const val TARGET_TOP_LEFT :Int = 6
+        const val TARGET_BOTTOM_LEFT :Int = 7
+        const val TARGET_TOP_RIGHT :Int = 8
+        const val TARGET_BOTTOM_RIGHT :Int = 9
+        const val TARGET_FILL_IN :Int = 10
+        const val TARGET_LEFT :Int = 11
+        const val TARGET_RIGHT :Int = 12
 
-        const val POINTER_RIGHT :Long = 1
-        const val POINTER_MIDDLE :Long = 2
-        const val POINTER_LEFT :Long = 3
-        const val POINTER_GONE :Long = 4
+        const val POINTER_RIGHT :Int = 1
+        const val POINTER_MIDDLE :Int = 2
+        const val POINTER_LEFT :Int = 3
+        const val POINTER_GONE :Int = 4
 
         internal const val CIRCLE_ADDITIONAL_RADIUS_RATIO = 1.5
     }

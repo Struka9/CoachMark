@@ -1,12 +1,7 @@
 package com.rizafu.coachmark
 
 import android.content.Context
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Paint
-import android.graphics.PorterDuff
-import android.graphics.PorterDuffXfermode
-import android.graphics.RectF
+import android.graphics.*
 import android.util.AttributeSet
 import android.view.View
 
@@ -16,13 +11,13 @@ import android.view.View
 
 class CoachMarkOverlay : View {
 
-    private lateinit var paint: Paint
-    private var rectF: RectF? = null
-    private var radius: Int = 0
-    private var x: Int = 0
-    private var y: Int = 0
-
-    private var isCircle: Boolean = false
+    private val CIRCLE_ADDITIONAL_RADIUS_RATIO = 1.5
+    private var coachMarkHole: MutableList<CoachMarkHole> = mutableListOf()
+    private val paint: Paint = Paint().apply {
+        isAntiAlias = true
+        color = Color.TRANSPARENT
+        xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
+    }
 
     constructor(context: Context) : super(context) {
         init()
@@ -37,34 +32,51 @@ class CoachMarkOverlay : View {
     }
 
     private fun init() {
-        isDrawingCacheEnabled = true
-
         setLayerType(View.LAYER_TYPE_SOFTWARE, null)
     }
 
-    fun addRect(x: Int, y: Int, width: Int, height: Int, radius: Int, padding: Int, isCircle: Boolean) {
-        this.isCircle = isCircle
-        this.radius = radius + padding
-        this.x = x
-        this.y = y
-        paint = Paint()
-        paint.isAntiAlias = true
-        paint.color = Color.TRANSPARENT
-        paint.xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
+    fun addRect(view: View, padding: Int, cornerRadius: Int, isCircle: Boolean){
+        val rect = Rect()
+        view.getGlobalVisibleRect(rect)
 
-        val r = x + width
-        val b = y + height
+        val width = rect.width()
+        val height = rect.height()
 
-        rectF = RectF((x - padding).toFloat(), (y - padding).toFloat(), (r + padding).toFloat(), (b + padding).toFloat())
+        if (isCircle) {
+            val cx = rect.centerX()
+            val cy = rect.centerY()
+            val radius = (Math.max(rect.width(), rect.height()) / 2f * CIRCLE_ADDITIONAL_RADIUS_RATIO).toInt()
+            coachMarkHole.add(CoachMarkHole(cx, cy, width, height, padding, radius, isCircle))
+        } else {
+            val x = rect.left
+            val y = rect.top
+            coachMarkHole.add(CoachMarkHole(x, y, width, height, padding, cornerRadius, isCircle))
+        }
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-
-        if (isCircle) {
-            canvas.drawCircle(x.toFloat(), y.toFloat(), radius.toFloat(), paint)
-        } else {
-            rectF?.let { canvas.drawRoundRect(it, radius.toFloat(), radius.toFloat(), paint) }
+        coachMarkHole.forEach {
+            if (it.isCircle) {
+                canvas.drawCircle(it.x.toFloat(), it.y.toFloat(), it.radius.toFloat(), paint)
+            } else {
+                canvas.drawRoundRect(it.rectF, it.radius.toFloat(), it.radius.toFloat(), paint)
+            }
         }
     }
 }
+
+private class CoachMarkHole(
+        val x: Int,
+        val y: Int,
+        val width: Int,
+        val height: Int,
+        val padding: Int,
+        val radius: Int,
+        val isCircle: Boolean,
+        val rectF: RectF = RectF(
+                (x - padding).toFloat(),
+                (y - padding).toFloat(),
+                ((x + width) + padding).toFloat(),
+                ((y + height) + padding).toFloat())
+)
